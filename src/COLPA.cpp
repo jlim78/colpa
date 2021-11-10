@@ -658,9 +658,11 @@ double COLPA::getConnectionRadius() {
   return mConnectionRadius;
 }
 
+// Depreciated
 // ============================================================================
 void COLPA::setCollisionCheckResolution(double resolution) {
   mCollisionCheckResolution = resolution;
+  getSpaceInformation()->setStateValidityCheckingResolution(resolution);
 }
 
 // ============================================================================
@@ -738,47 +740,74 @@ int COLPA::evaluateVertex(const Vertex& v) {
 }
 
 // ============================================================================
+/* evaluateEdge given an edge, outputs the class of the edge (for perceiving chnages)
+   and assigns intrinsically the value and the class of the edge.
+*/
 int COLPA::evaluateEdge(const Edge& e) {
 
+  // For benchmark purposes
   auto tic = std::chrono::high_resolution_clock::now();
-
   mNumberOfEdgeEvaluations++;
 
-  // Collision check the start and goal.
+  // Retreive start and end vertices
   Vertex startVertex = source(e, mGraph);
   Vertex endVertex = target(e, mGraph);
 
+  // Retreive ompl states of start and end vertices
   auto startState = mGraph[startVertex].getState()->getOMPLState();
   auto endState = mGraph[endVertex].getState()->getOMPLState();
 
-  int edgeClass = std::max(this->evaluateVertex(startVertex),  this->evaluateVertex(endVertex));
-
-  double edgeValue;
-
-  // Interpolate the edge
-  int maxSteps = 1.0 / mCollisionCheckResolution;
-  for (int multiplier = 1; multiplier < maxSteps + 1; ++multiplier) {
-    double interpolationStep = mCollisionCheckResolution * multiplier;
-    assert(interpolationStep <= 1);
-    StatePtr midVertex(new colpa::datastructures::State(mSpace));
-    mSpace->interpolate(startState, endState, interpolationStep, midVertex->getOMPLState());
-
-    edgeClass = std::max(mStateClassifier(midVertex->getOMPLState()), edgeClass);
-  } // End For interpolation
-
-
-  edgeValue = mSpace->distance(startState, endState);
-  // Actual assignment
-  mGraph[e].setValue(edgeValue);
-  mGraph[e].setColor(edgeClass);
-  mGraph[e].setEvaluationStatus(EvaluationStatus::Evaluated);
+  // First check if this edge is valid motion,
+  // note that validity check resolution is set for spaceInformation
+  if(!getSpaceInformation()->checkMotion(startState, endState))
+  {
+    // Okay, this motion is not valid (checkMotion uses si stateValidityChecker)
+    // Set value to infinty
+    mGraph[e].setValue(std::numeric_limits<double>::infinity());
+    // Set color to worst
+    mGraph[e].setColor(TotalClassNumber-1);
+    // Set evaluation status on
+    mGraph[e].setEvaluationStatus(EvaluationStatus::Evaluated);
+  }
+  else
+  {
+    // Oh, this motion is valid. Let's compute the value and the class
+    // Set value to the length of motion
+    mGraph[e].setValue(mSpace->distance(startState, endState));
+    // Set color the worst color of start and end vertices
+    mGraph[e].setColor(std::max(this->evaluateVertex(startVertex),  this->evaluateVertex(endVertex)));
+    // Set evaluation status on
+    mGraph[e].setEvaluationStatus(EvaluationStatus::Evaluated);
+  }
 
   auto toc = std::chrono::high_resolution_clock::now();
   std::chrono::duration<double> time_span = std::chrono::duration_cast<std::chrono::duration<double>>(toc - tic);
   mTotalEdgeEvaluationTime += time_span.count();
 
-  return edgeClass;
+  return mGraph[e].getColor();
 
+  //
+  //
+  //
+  // double edgeValue;
+  //
+  // // Interpolate the edge
+  // int maxSteps = 1.0 / mCollisionCheckResolution;
+  // for (int multiplier = 1; multiplier < maxSteps + 1; ++multiplier) {
+  //   double interpolationStep = mCollisionCheckResolution * multiplier;
+  //   assert(interpolationStep <= 1);
+  //   StatePtr midVertex(new colpa::datastructures::State(mSpace));
+  //   mSpace->interpolate(startState, endState, interpolationStep, midVertex->getOMPLState());
+  //
+  //   edgeClass = std::max(mStateClassifier(midVertex->getOMPLState()), edgeClass);
+  // } // End For interpolation
+  //
+  //
+  // edgeValue = mSpace->distance(startState, endState);
+  // // Actual assignment
+  // mGraph[e].setValue(edgeValue);
+  // mGraph[e].setColor(edgeClass);
+  // mGraph[e].setEvaluationStatus(EvaluationStatus::Evaluated);
 }
 
 
