@@ -128,12 +128,12 @@ void COLPA::setupPreliminaries() {
     // skip the source vertex itself
     if (mSourceVertex == v)
       continue;
-    double distance = mSpace->distance(
-        mGraph[v].getState()->getOMPLState(), mGraph[mSourceVertex].getState()->getOMPLState());
+    // double distance = mSpace->distance(
+    //     mGraph[v].getState()->getOMPLState(), mGraph[mSourceVertex].getState()->getOMPLState());
     boost::tie(uv, edgeExists) = edge(mSourceVertex, v, mGraph);
     if (!edgeExists){
         std::pair<Edge, bool> newEdge = boost::add_edge(mSourceVertex, v, mGraph);
-        mGraph[newEdge.first].setLength(distance);
+        // mGraph[newEdge.first].setLength(distance);
         mGraph[newEdge.first].setEvaluationStatus(EvaluationStatus::NotEvaluated);
         assert(newEdge.second);
     }
@@ -147,12 +147,12 @@ void COLPA::setupPreliminaries() {
     // skip the target vertex itself
     if (mTargetVertex == v)
       continue;
-    double distance = mSpace->distance(
-        mGraph[v].getState()->getOMPLState(), mGraph[mTargetVertex].getState()->getOMPLState());
+    // double distance = mSpace->distance(
+    //     mGraph[v].getState()->getOMPLState(), mGraph[mTargetVertex].getState()->getOMPLState());
     boost::tie(uv, edgeExists) = edge(mTargetVertex, v, mGraph);
     if (!edgeExists){
         std::pair<Edge, bool> newEdge = boost::add_edge(mTargetVertex, v, mGraph);
-        mGraph[newEdge.first].setLength(distance);
+        // mGraph[newEdge.first].setLength(distance);
         mGraph[newEdge.first].setEvaluationStatus(EvaluationStatus::NotEvaluated);
         assert(newEdge.second);
     }
@@ -819,8 +819,10 @@ ompl::base::PathPtr COLPA::constructSolution(const Vertex& source, const Vertex&
   // std::cout << "path : " ;
   while (v != source) {
     // std::cout << v << ", " ;
+    if(getSpaceInformation()->getStateDimension()>2)
     mGraph[v].getState()->getOMPLState()->as<ompl::base::SE2StateSpace::StateType>()->setYaw(
         wrapAngle(mGraph[v].getState()));
+
     path->append(mGraph[v].getState()->getOMPLState());
     v = mGraph[v].getParent();
   }
@@ -838,6 +840,7 @@ ompl::base::PathPtr COLPA::constructSolution(const Vertex& source, const Vertex&
 void COLPA::setStateClassifier(std::function<int(const ompl::base::State*)> classifier)
 {
   mStateClassifier = classifier;
+  OMPL_INFORM("StateClassifier Setup.");
 }
 
 
@@ -980,6 +983,7 @@ void COLPA::generateNewSamples(int batchSize, bool updateVertices) {
 
 // ============================================================================
 void COLPA::generateNewSamples(double sample_multiplier, double buffer, bool updateVertices) {
+
   std::vector<double> sourcePosition;
   std::vector<double> targetPosition;
   mSpace->copyToReals(sourcePosition, mGraph[mSourceVertex].getState()->getOMPLState());
@@ -1016,16 +1020,18 @@ void COLPA::generateNewSamples(double sample_multiplier, double buffer, bool upd
   int numSampled = 0;
   // mOnlineVertices.reserve(mOnlineVertices.size() + batchSize);
   while (numSampled < batchSize) {
-    // Generate a halton sample and increment the index.
-    auto newPosition = haltonSample(mHaltonIndex);
-    mHaltonIndex++;
+
+    // assert ReedsShepp
+    std::vector<double> newPosition = mHaltonSequence->sample();
 
     // Scale the halton sample to between the limits.
     Eigen::Vector2d nPosition = Eigen::Vector2d(newPosition.data());
     nPosition = origin + nPosition[0] * x_axis + nPosition[1] * y_axis;
     newPosition = std::vector<double>{
         &nPosition[0], nPosition.data() + nPosition.cols() * nPosition.rows()};
-    newPosition[2] = zmin + (zmax - zmin) * newPosition[2];
+
+    if (newPosition.size()>2)
+      newPosition[2] = zmin + (zmax - zmin) * newPosition[2];
 
     mSpace->copyFromReals(sampledState, newPosition);
 
@@ -1053,10 +1059,12 @@ void COLPA::generateNewSamples(double sample_multiplier, double buffer, bool upd
     knnGraph.nearestK(sampleVertex, mKNeighbors, nearestSamples);
     // std::cout << "Found " << nearestSamples.size() << "neighors" <<std::endl;
     for (const auto& v : nearestSamples) {
-      double distance = mSpace->distance(
-          mGraph[v].getState()->getOMPLState(), mGraph[sampleVertex].getState()->getOMPLState());
+      // No need to assign distance, we are not using any edge heuristic.
+
       std::pair<Edge, bool> newEdge = boost::add_edge(sampleVertex, v, mGraph);
-      mGraph[newEdge.first].setLength(distance);
+      // double distance = mSpace->distance(
+      //     mGraph[v].getState()->getOMPLState(), mGraph[sampleVertex].getState()->getOMPLState());
+      // mGraph[newEdge.first].setLength(distance);
       mGraph[newEdge.first].setEvaluationStatus(EvaluationStatus::NotEvaluated);
       mGraph[newEdge.first].setColor(-1);
       assert(newEdge.second);
@@ -1080,7 +1088,7 @@ void COLPA::generateNewSamples(double sample_multiplier, double buffer, bool upd
   }
 
   mNumSampleCalls++;
-  OMPL_INFORM("Added %d samples", numSampled);
+  OMPL_INFORM("Added %d %d samples", numSampled, getSpaceInformation()->getStateDimension());
 }
 
 // ============================================================================
