@@ -289,6 +289,44 @@ ompl::base::PlannerStatus COLPA::solve(const ompl::base::PlannerTerminationCondi
 }
 
 // ============================================================================
+ompl::base::PlannerStatus COLPA::solve_once() {
+
+  mPreempt = false;
+  mPlannerStatus = PlannerStatus::NotSolved;
+
+  // Return if source or target are in collision.
+  if (evaluateVertex(mSourceVertex) == TotalClassNumber-1) {
+    OMPL_INFORM("Start State is invalid.");
+    return ompl::base::PlannerStatus::INVALID_START;
+  }
+
+  if (evaluateVertex(mTargetVertex) == TotalClassNumber-1) {
+    OMPL_INFORM("Goal State is invalid.");
+    return ompl::base::PlannerStatus::INVALID_GOAL;
+  }
+
+  // Now update the source vertex for propagation to begin.
+  this->updateVertex(mSourceVertex);
+
+  // Propagates inconsistency all the way
+  this->computeShortestPath();
+
+  if (mPlannerStatus == PlannerStatus::Solved) {
+    pdef_->addSolutionPath(constructSolution(mSourceVertex, mTargetVertex));
+    this->setBestPathCost(mGraph[mTargetVertex].getGclass());
+
+    // OMPL_INFORM("Plan Found.");
+    return ompl::base::PlannerStatus::EXACT_SOLUTION;
+  }
+  if (mPreempt) {
+    // OMPL_INFORM("Planning Aborted.");
+    return ompl::base::PlannerStatus::ABORT;
+  }
+  // OMPL_INFORM("Planning TIMEOUT.");
+  return ompl::base::PlannerStatus::TIMEOUT;
+}
+
+// ============================================================================
 Keys COLPA::calculateKeys(Vertex u) {
   // double minval = std::min(mGraph[u].getCostToCome(),mGraph[u].getRHS());
   // return std::make_pair(minval+this->getGraphHeuristic(u), minval);
@@ -883,6 +921,93 @@ std::vector<double> COLPA::haltonSample(std::size_t index) const {
 
 }
 
+
+// ============================================================================
+void COLPA::generateUniformSamples(int batchSize,bool updateVertices) {
+
+  // Reset counters;
+  mNumberOfEdgeEvaluations=0;
+
+  mNumberOfVertexExpansions=0;
+
+  mTotalEdgeEvaluationTime=0;
+
+  mTotalVertexExpansionTime=0;
+
+  // Vertices to be updated if updateVertices is set True
+  std::vector<Vertex> verticesTobeUpdated;
+  // Collect near samples
+  std::vector<Vertex> nearestSamples;
+
+  auto validityChecker = si_->getStateValidityChecker();
+  unsigned int dim = si_->getStateDimension();
+
+
+  const ompl::base::RealVectorBounds &bounds
+    = static_cast<const ompl::base::RealVectorStateSpace*>(mSpace.get())->getBounds();
+
+  auto uniformSampler = si_->allocStateSampler();
+
+  // Scale to required limits.
+  int numSampled = 0;
+  while (numSampled < batchSize) {
+
+    // ================= Uniform Sampler  ====================//
+    // Our ompl::base::State* wrapper
+    StatePtr sampledState(new colpa::datastructures::State(mSpace));
+
+    uniformSampler->sampleUniform(sampledState->getOMPLState());
+    // mSpace->copyFromReals(sampledState->getOMPLState(), newPosition);
+
+
+    int stateColor = mStateClassifier(sampledState->getOMPLState());
+
+    // If the sampled state is in known region, but in collision, ignore.
+    if(stateColor == TotalClassNumber-1){
+      continue;
+    }
+
+
+    // Since we have a valid sample, increment the numSampled.
+    numSampled++;
+
+    // Create a new vertex in the graph.
+    Vertex sampleVertex = boost::add_vertex(mGraph);
+    // mOnlineVertices.push_back(sampleVertex);
+    mGraph[sampleVertex].setState(std::make_shared<State>(mSpace, sampledState->getOMPLState()));
+    mGraph[sampleVertex].setColor(stateColor);
+    // Do we need to assign default values?
+
+    knnGraph.nearestK(sampleVertex, mKNeighbors, nearestSamples);
+    for (const auto& v : nearestSamples) {
+        double distance = mSpace->distance(
+            mGraph[sampleVertex].getState()->getOMPLState(), mGraph[v].getState()->getOMPLState());
+        std::pair<Edge, bool> newEdge = boost::add_edge(sampleVertex, v, mGraph);
+        mGraph[newEdge.first].setLength(distance);
+        mGraph[newEdge.first].setEvaluationStatus(EvaluationStatus::NotEvaluated);
+        assert(newEdge.second);
+    }
+
+    // Now add to the graph
+    knnGraph.add(sampleVertex);
+    verticesTobeUpdated.push_back(sampleVertex);
+
+  } // End while a batch is sampled.
+
+  // Update newly added vertices
+  if (updateVertices)
+  {
+    // Now update the vertices
+    for (std::vector<Vertex>::iterator it = verticesTobeUpdated.begin() ; it != verticesTobeUpdated.end(); ++it) {
+      this->updateVertex(*it);
+    }
+    // Okay, there is some change, we should re-solve it.
+    mPlannerStatus = PlannerStatus::NotSolved;
+
+    pdef_->clearSolutionPaths();
+  }
+
+}
 
 // ============================================================================
 void COLPA::generateNewSamples(int batchSize, bool updateVertices) {

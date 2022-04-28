@@ -68,6 +68,7 @@ public:
   /// \param[in] ptc OMPL Planning Termination Condition.
   ompl::base::PlannerStatus solve(const ompl::base::PlannerTerminationCondition& ptc) override;
 
+  ompl::base::PlannerStatus solve_once();
   /// Set the K neighbors for all nodes.
   void setKNeighbors(int num_neighbors);
 
@@ -132,12 +133,23 @@ public:
   /// Identify all changed vertices and update their edges, then updateVertex
   bool perceiveChanges();
 
+  // Generate uniform sampled graph within a current space bound
+  void generateUniformSamples(int batchSize,bool updateVertices);
+
   /// Sample a rectangle between start and goal using Halton sampling
   void generateNewSamples(int batchSize, bool updateVertices);
 
   /// Generate a halton sample at the given index.
   std::vector<double> haltonSample(std::size_t index) const;
 
+
+  /// Get timing info
+  double getEdgeEvalTime() {return mTotalEdgeEvaluationTime;};
+
+  /// Get timing info
+  double getVertexExpTime() {return mTotalVertexExpansionTime;};
+
+  
   // for getGraph
   typedef std::tuple<double, double, double, bool> Node;
 

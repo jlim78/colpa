@@ -12,7 +12,7 @@
 #include "colpa/datastructures/PathClass.hpp" // For PathClassType def
 
 // This is to define the total number of classes in the world
-#define TotalClassNumber 4
+#define TotalClassNumber 3
 
 namespace colpa {
 namespace datastructures {
