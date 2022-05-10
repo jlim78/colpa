@@ -139,6 +139,9 @@ public:
   /// Sample a rectangle between start and goal using Halton sampling
   void generateNewSamples(int batchSize, bool updateVertices);
 
+  /// Generate a graph, using samples 
+  void generateGraph(std::vector<std::pair<double,double>>& states);
+
   /// Generate a halton sample at the given index.
   std::vector<double> haltonSample(std::size_t index) const;
 
@@ -149,7 +152,7 @@ public:
   /// Get timing info
   double getVertexExpTime() {return mTotalVertexExpansionTime;};
 
-  
+
   // for getGraph
   typedef std::tuple<double, double, double, bool> Node;
 

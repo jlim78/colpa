@@ -921,6 +921,67 @@ std::vector<double> COLPA::haltonSample(std::size_t index) const {
 
 }
 
+// ============================================================================
+void COLPA::generateGraph(std::vector<std::pair<double,double>>& states) {
+
+  // Reset counters;
+  mNumberOfEdgeEvaluations=0;
+
+  mNumberOfVertexExpansions=0;
+
+  mTotalEdgeEvaluationTime=0;
+
+  mTotalVertexExpansionTime=0;
+
+  // Collect near samples
+  std::vector<Vertex> nearestSamples;
+
+  auto validityChecker = si_->getStateValidityChecker();
+  unsigned int dim = si_->getStateDimension();
+
+  auto uniformSampler = si_->allocStateSampler();
+
+  // Scale to required limits.
+  int numSampled = 0;
+  for (std::vector<std::pair<double,double>>::iterator state_it = states.begin() ; state_it != states.end(); ++state_it)
+  {
+    // ================= Uniform Sampler for theta ====================//
+    StatePtr sampledState(new colpa::datastructures::State(mSpace));
+    uniformSampler->sampleUniform(sampledState->getOMPLState());
+
+    // Override x,y value with given state value
+    sampledState->getOMPLState()->as<ompl::base::SE2StateSpace::StateType>()->setX(state_it->first);
+    sampledState->getOMPLState()->as<ompl::base::SE2StateSpace::StateType>()->setY(state_it->second);
+
+    int stateColor = mStateClassifier(sampledState->getOMPLState());
+
+    // If the sampled state is in known region, but in collision, ignore.
+    if(stateColor == TotalClassNumber-1){
+      continue;
+    }
+    
+    // Create a new vertex in the graph.
+    Vertex sampleVertex = boost::add_vertex(mGraph);
+    mGraph[sampleVertex].setState(std::make_shared<State>(mSpace, sampledState->getOMPLState()));
+    mGraph[sampleVertex].setColor(stateColor);
+    // Do we need to assign default values?
+
+    knnGraph.nearestK(sampleVertex, mKNeighbors, nearestSamples);
+    for (const auto& v : nearestSamples) {
+        double distance = mSpace->distance(
+            mGraph[sampleVertex].getState()->getOMPLState(), mGraph[v].getState()->getOMPLState());
+        std::pair<Edge, bool> newEdge = boost::add_edge(sampleVertex, v, mGraph);
+        mGraph[newEdge.first].setLength(distance);
+        mGraph[newEdge.first].setEvaluationStatus(EvaluationStatus::NotEvaluated);
+        assert(newEdge.second);
+    }
+
+    // Now add to the graph
+    knnGraph.add(sampleVertex);
+
+  }
+
+}
 
 // ============================================================================
 void COLPA::generateUniformSamples(int batchSize,bool updateVertices) {
