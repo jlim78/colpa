@@ -315,14 +315,14 @@ ompl::base::PlannerStatus COLPA::solve_once() {
     pdef_->addSolutionPath(constructSolution(mSourceVertex, mTargetVertex));
     this->setBestPathCost(mGraph[mTargetVertex].getGclass());
 
-    // OMPL_INFORM("Plan Found.");
+    OMPL_INFORM("Plan Found.");
     return ompl::base::PlannerStatus::EXACT_SOLUTION;
   }
   if (mPreempt) {
-    // OMPL_INFORM("Planning Aborted.");
+    OMPL_INFORM("Planning Aborted.");
     return ompl::base::PlannerStatus::ABORT;
   }
-  // OMPL_INFORM("Planning TIMEOUT.");
+  OMPL_INFORM("Planning TIMEOUT.");
   return ompl::base::PlannerStatus::TIMEOUT;
 }
 
@@ -959,7 +959,7 @@ void COLPA::generateGraph(std::vector<std::pair<double,double>>& states) {
     if(stateColor == TotalClassNumber-1){
       continue;
     }
-    
+
     // Create a new vertex in the graph.
     Vertex sampleVertex = boost::add_vertex(mGraph);
     mGraph[sampleVertex].setState(std::make_shared<State>(mSpace, sampledState->getOMPLState()));
