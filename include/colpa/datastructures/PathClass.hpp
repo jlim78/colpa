@@ -86,7 +86,9 @@ public:
 		{
 			cost += this->at(i);
 		}
+		return cost;
 	}
+	
 /* Unused functions
 
 	double normSq () const{

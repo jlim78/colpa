@@ -268,7 +268,7 @@ private:
   bool mGraphSetup{false};
 
   ///  Best path cost so far found.
-  colpa::datastructures::PathClassType mBestPathCost{std::numeric_limits<float>::infinity()};
+  colpa::datastructures::PathClassType mBestPathCost{std::numeric_limits<double>::infinity()};
 
   /// Whether or not to stop planning.
   bool mPreempt;

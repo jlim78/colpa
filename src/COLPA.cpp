@@ -1291,7 +1291,7 @@ void COLPA::generateNewSamples(double sample_multiplier, double buffer, bool upd
   }
 
   mNumSampleCalls++;
-  OMPL_INFORM("Added %d %dD samples", numSampled, getSpaceInformation()->getStateDimension());
+  // OMPL_INFORM("Added %d %dD samples", numSampled, getSpaceInformation()->getStateDimension());
 }
 
 // ============================================================================
