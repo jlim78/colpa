@@ -180,6 +180,11 @@ public:
     mBestPathCost = colpa::datastructures::PathClassType(std::numeric_limits<double>::max());
   }
 
+  /// Sample a rectangle between start and goal using Halton sampling
+  void generateNewSamples(double sample_multiplier, double buffer);
+
+  void generateNewSamples(double sample_multiplier, double buffer, bool updateVertices);
+
   /// For visuaization of graph
   colpa::datastructures::Graph getGraph(){return mGraph;};
   void setDebugCallback(std::function<void(colpa::datastructures::Graph g)> callback);
@@ -223,10 +228,6 @@ private:
   /// Calculate the neighoring radius depending on the current number of samples
   double calculateR() const;
 
-  /// Sample a rectangle between start and goal using Halton sampling
-  void generateNewSamples(double sample_multiplier, double buffer);
-
-  void generateNewSamples(double sample_multiplier, double buffer, bool updateVertices);
   /// Wraps yaw to -pi, pi
   double wrapAngle(const colpa::datastructures::StatePtr stateptr);
 

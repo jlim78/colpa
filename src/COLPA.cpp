@@ -816,20 +816,21 @@ int COLPA::evaluateEdge(const Edge& e) {
 
     // Method 1 : approximation by checking end vertices
     // mGraph[e].setColor(std::max(this->evaluateVertex(startVertex),  this->evaluateVertex(endVertex)));
+    mGraph[e].setColor(std::min(this->evaluateVertex(startVertex),  this->evaluateVertex(endVertex)));
 
     // Method 2a : precisely interpolate using motion validator -> requires custom MV
     // mGraph[e].setColor(getSpaceInformation()->getMotionValidator()->classifyMotion());
 
     // Method 2b : interpolate using StateSpace
-    int color = std::max(mStateClassifier(startState), mStateClassifier(endState));
-    int steps = static_cast<unsigned int>(ceil(mGraph[e].getValue()));
-    ompl::base::State* testState = si_->allocState();
-    for (int i = 0; i < steps-1; i++) {
-      mSpace->interpolate(startState, endState, (i+1)/steps, testState);
-      color = std::max(mStateClassifier(testState),color);
-    }
-    si_->freeState(testState);
-    mGraph[e].setColor(color);
+    // int color = std::max(mStateClassifier(startState), mStateClassifier(endState));
+    // int steps = static_cast<unsigned int>(ceil(mGraph[e].getValue()));
+    // ompl::base::State* testState = si_->allocState();
+    // for (int i = 0; i < steps-1; i++) {
+    //   mSpace->interpolate(startState, endState, (i+1)/steps, testState);
+    //   color = std::max(mStateClassifier(testState),color);
+    // }
+    // si_->freeState(testState);
+    // mGraph[e].setColor(color);
 
     // Set evaluation status on
     mGraph[e].setEvaluationStatus(EvaluationStatus::Evaluated);
@@ -1410,7 +1411,7 @@ void COLPA::getGraphWithPaths(
     std::vector<std::tuple<Node, Node>>* edges,
     std::vector<std::vector<Node>>* paths) {
 
-  if (mGraphSetup) {
+  // if (mGraphSetup) {
     VertexIter vi, vi_end;
     StatePtr midVertex(new colpa::datastructures::State(mSpace));
     paths->reserve(num_edges(mGraph));
@@ -1485,6 +1486,6 @@ void COLPA::getGraphWithPaths(
         paths->push_back(path);
       }
     }
-  }
+  // } // mGraphSetup
 }
 } // namespace colpa
