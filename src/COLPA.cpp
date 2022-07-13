@@ -1296,6 +1296,116 @@ void COLPA::generateNewSamples(double sample_multiplier, double buffer, bool upd
 }
 
 // ============================================================================
+void COLPA::generateRectangleSamples(double sample_multiplier, double buffer, int minBatchSize, bool updateVertices) {
+
+  std::vector<double> sourcePosition;
+  std::vector<double> targetPosition;
+  mSpace->copyToReals(sourcePosition, mGraph[mSourceVertex].getState()->getOMPLState());
+  mSpace->copyToReals(targetPosition, mGraph[mTargetVertex].getState()->getOMPLState());
+
+  // Find euc dist but cut off w
+  Eigen::Vector2d sourceVect = Eigen::Vector2d(sourcePosition.data());
+  Eigen::Vector2d targetVect = Eigen::Vector2d(targetPosition.data());
+
+  double euc_dist = this->getGraphHeuristic(mSourceVertex);
+
+  // Setup
+  Eigen::Rotation2D<double> rot90Clock(-M_PI / 2);
+  Eigen::Rotation2D<double> rot90CounterClock(M_PI / 2);
+
+  // Define origin x_axis/y_axis vectors for sampling points in rectangle
+  Eigen::Vector2d buffSource = (1 + buffer / euc_dist) * (sourceVect - targetVect) + targetVect;
+  Eigen::Vector2d x_axis = (1 + 2 * buffer / euc_dist) * (targetVect - sourceVect);
+  Eigen::Vector2d y_axis = rot90CounterClock.toRotationMatrix() * x_axis;
+  Eigen::Vector2d bottom_v = rot90Clock.toRotationMatrix() * x_axis;
+  Eigen::Vector2d origin = buffSource + 0.5 * bottom_v;
+  double zmin = -M_PI;
+  double zmax = M_PI;
+
+  // Sample points inside the space.
+  int batchSize = std::floor(sample_multiplier * euc_dist) > minBatchSize ? std::floor(sample_multiplier * euc_dist) : minBatchSize;
+  ompl::base::State* sampledState = mSpace->allocState();
+
+  // Vertices to be updated if updateVertices is set True
+  std::vector<Vertex> verticesTobeUpdated;
+
+  // Scale to required limits.
+  int numSampled = 0;
+  // mOnlineVertices.reserve(mOnlineVertices.size() + batchSize);
+  while (numSampled < batchSize) {
+
+    // assert ReedsShepp
+    std::vector<double> newPosition = mHaltonSequence->sample();
+
+    // Scale the halton sample to between the limits.
+    Eigen::Vector2d nPosition = Eigen::Vector2d(newPosition.data());
+    nPosition = origin + nPosition[0] * x_axis + nPosition[1] * y_axis;
+    newPosition = std::vector<double>{
+        &nPosition[0], nPosition.data() + nPosition.cols() * nPosition.rows()};
+
+    if (newPosition.size()>2)
+      newPosition[2] = zmin + (zmax - zmin) * newPosition[2];
+
+    mSpace->copyFromReals(sampledState, newPosition);
+
+    int stateColor = mStateClassifier(sampledState);
+
+    // If the sampled state is in known region, but in collision, ignore.
+    if(stateColor == TotalClassNumber-1){
+      continue;
+    }
+
+
+    // Since we have a valid sample, increment the numSampled.
+    numSampled++;
+
+    // Create a new vertex in the graph.
+    Vertex sampleVertex = boost::add_vertex(mGraph);
+    // mOnlineVertices.push_back(sampleVertex);
+    mGraph[sampleVertex].setState(std::make_shared<State>(mSpace, sampledState));
+    mGraph[sampleVertex].setColor(stateColor);
+    // Do we need to assign default values?
+
+    // 3. Connect edges
+    std::vector<Vertex> nearestSamples;
+    // knnGraph.nearestR(sampleVertex, mConnectionRadius, nearestSamples);
+    knnGraph.nearestK(sampleVertex, mKNeighbors, nearestSamples);
+    // std::cout << "Found " << nearestSamples.size() << "neighors" <<std::endl;
+    for (const auto& v : nearestSamples) {
+      // No need to assign distance, we are not using any edge heuristic.
+
+      std::pair<Edge, bool> newEdge = boost::add_edge(sampleVertex, v, mGraph);
+      // double distance = mSpace->distance(
+      //     mGraph[v].getState()->getOMPLState(), mGraph[sampleVertex].getState()->getOMPLState());
+      // mGraph[newEdge.first].setLength(distance);
+      mGraph[newEdge.first].setEvaluationStatus(EvaluationStatus::NotEvaluated);
+      mGraph[newEdge.first].setColor(-1);
+      assert(newEdge.second);
+    }
+
+    knnGraph.add(sampleVertex);
+    verticesTobeUpdated.push_back(sampleVertex);
+  }
+
+  // Update newly added vertices
+  if (updateVertices)
+  {
+    // Now update the vertices
+    for (std::vector<Vertex>::iterator it = verticesTobeUpdated.begin() ; it != verticesTobeUpdated.end(); ++it) {
+      this->updateVertex(*it);
+    }
+    // Okay, there is some change, we should re-solve it.
+    mPlannerStatus = PlannerStatus::NotSolved;
+
+    pdef_->clearSolutionPaths();
+  }
+
+  mNumSampleCalls++;
+  // OMPL_INFORM("Added %d %dD samples", numSampled, getSpaceInformation()->getStateDimension());
+}
+
+
+// ============================================================================
 double COLPA::calculateR() const
 {
     // Cast to double for readability. (?)

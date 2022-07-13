@@ -185,6 +185,8 @@ public:
 
   void generateNewSamples(double sample_multiplier, double buffer, bool updateVertices);
 
+  void generateRectangleSamples(double sample_multiplier, double buffer, int minBatchSize, bool updateVertices);
+
   /// For visuaization of graph
   colpa::datastructures::Graph getGraph(){return mGraph;};
   void setDebugCallback(std::function<void(colpa::datastructures::Graph g)> callback);
